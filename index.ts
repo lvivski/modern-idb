@@ -7,36 +7,36 @@ interface Index extends Wrap<IDBIndex> {}
 interface CursorWithValue extends Wrap<IDBCursorWithValue> {}
 interface Cursor extends Wrap<IDBCursor> {}
 
+type AnyFunction = (...args: any[]) => any
+type ReplaceReturnType<F extends AnyFunction, R> = (...args: Parameters<F>) => R
+type Map<T> = T extends IDBDatabase
+  ? Database
+  : T extends IDBTransaction
+  ? Transaction
+  : T extends IDBObjectStore
+  ? ObjectStore
+  : T extends IDBIndex
+  ? Index
+  : T extends IDBObjectStore | IDBIndex
+  ? ObjectStore | Index
+  : T extends IDBCursorWithValue
+  ? CursorWithValue
+  : T extends IDBCursor
+  ? Cursor
+  : T
+
 type Wrap<O> = {
   [K in keyof O]: O[K] extends (...args: any[]) => infer R
     ? R extends IDBRequest<infer T>
-      ? T extends IDBDatabase
-        ? (...args: Parameters<O[K]>) => Promise<Database>
-        : T extends IDBCursorWithValue | null
-        ? (...args: Parameters<O[K]>) => AsyncIterable<CursorWithValue>
+      ? T extends IDBCursorWithValue | null
+        ? ReplaceReturnType<O[K], AsyncIterable<CursorWithValue>>
         : T extends IDBCursor | null
-        ? (...args: Parameters<O[K]>) => AsyncIterable<Cursor>
+        ? ReplaceReturnType<O[K], AsyncIterable<Cursor>>
         : T extends IDBValidKey | undefined
-        ? (...args: Parameters<O[K]>) => Promise<IDBValidKey | undefined>
-        : (...args: Parameters<O[K]>) => Promise<T>
-      : R extends IDBTransaction
-      ? (...args: Parameters<O[K]>) => Transaction
-      : R extends IDBObjectStore
-      ? (...args: Parameters<O[K]>) => ObjectStore
-      : R extends IDBIndex
-      ? (...args: Parameters<O[K]>) => Index
-      : (...args: Parameters<O[K]>) => R
-    : O[K] extends IDBDatabase
-    ? Database
-    : O[K] extends IDBTransaction
-    ? Transaction
-    : O[K] extends IDBObjectStore
-    ? ObjectStore
-    : O[K] extends IDBIndex
-    ? Index
-    : O[K] extends IDBObjectStore | IDBIndex
-    ? ObjectStore | Index
-    : O[K]
+        ? ReplaceReturnType<O[K], Promise<IDBValidKey | undefined>>
+        : ReplaceReturnType<O[K], Promise<Map<T>>>
+      : ReplaceReturnType<O[K], Map<R>>
+    : Map<O[K]>
 }
 
 type Schema = {
@@ -410,7 +410,7 @@ const cursorReturnMethods = [
   IDBIndex.prototype.openKeyCursor,
 ]
 
-function wrapFunction<T extends (...args: any[]) => any>(value: T) {
+function wrapFunction<T extends AnyFunction>(value: T) {
   return function (this: any, ...args: Parameters<T>) {
     const originalThis = inverseWrapMap.get(this) || this
     const result = value.apply(originalThis, args)
