@@ -53,7 +53,7 @@ type SchemaObjectStoreName<S extends Schema> = keyof S
 
 type SchemaObjectStore<
 	S extends Schema,
-	N extends SchemaObjectStoreName<S> = SchemaObjectStoreName<S>
+	N extends SchemaObjectStoreName<S>
 > = S[N]
 
 type SchemaObjectStoreKey<
