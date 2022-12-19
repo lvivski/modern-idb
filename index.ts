@@ -1,6 +1,19 @@
 interface Database extends Wrap<IDBDatabase> {}
 interface Transaction extends Wrap<IDBTransaction> {
-	promise: Promise<any>
+	then<U>(
+		onFulfilled?: (value: any) => U | PromiseLike<U>,
+		onRejected?: (reason: any) => U | PromiseLike<U>
+	): Promise<U>
+}
+interface Request<T> extends Wrap<IDBRequest<T>> {}
+interface ThenableRequest<T> extends Request<T> {
+	then<U>(
+		onFulfilled?: (value: T) => U | PromiseLike<U>,
+		onRejected?: (reason: any) => U | PromiseLike<U>
+	): Promise<U>
+}
+interface IterableRequest<T> extends Request<T> {
+	[Symbol.asyncIterator](): AsyncIterator<Wrap<T>>
 }
 interface ObjectStore extends Wrap<IDBObjectStore> {}
 interface Index extends Wrap<IDBIndex> {}
@@ -24,19 +37,19 @@ type Map<T> = T extends IDBDatabase
 	: T extends IDBCursor
 	? Cursor
 	: T
-
+type WrapProp<P> = P extends (...args: any[]) => infer R
+	? R extends IDBRequest<infer T>
+		? T extends IDBCursorWithValue | null
+			? ReplaceReturnType<P, IterableRequest<CursorWithValue>>
+			: T extends IDBCursor | null
+			? ReplaceReturnType<P, IterableRequest<Cursor>>
+			: T extends IDBValidKey | undefined
+			? ReplaceReturnType<P, ThenableRequest<IDBValidKey | undefined>>
+			: ReplaceReturnType<P, ThenableRequest<Map<T>>>
+		: ReplaceReturnType<P, Map<R>>
+	: Map<P>
 type Wrap<O> = {
-	[K in keyof O]: O[K] extends (...args: any[]) => infer R
-		? R extends IDBRequest<infer T>
-			? T extends IDBCursorWithValue | null
-				? ReplaceReturnType<O[K], AsyncIterable<CursorWithValue>>
-				: T extends IDBCursor | null
-				? ReplaceReturnType<O[K], AsyncIterable<Cursor>>
-				: T extends IDBValidKey | undefined
-				? ReplaceReturnType<O[K], Promise<IDBValidKey | undefined>>
-				: ReplaceReturnType<O[K], Promise<Map<T>>>
-			: ReplaceReturnType<O[K], Map<R>>
-		: Map<O[K]>
+	[K in keyof O]: WrapProp<O[K]>
 }
 
 type Schema = {
@@ -86,133 +99,167 @@ interface StrictDatabase<S extends Schema> extends Database {
 	createObjectStore<N extends SchemaObjectStoreName<S>>(
 		name: N,
 		options?: IDBObjectStoreParameters
-	): StrictObjectStore<S, N>
+	): StrictObjectStore<S, N, N[]>
 	deleteObjectStore<N extends SchemaObjectStoreName<S>>(name: N): void
-	transaction<N extends SchemaObjectStoreName<S>>(
-		storeNames: N,
+	transaction<TN extends SchemaObjectStoreName<S>>(
+		storeNames: TN,
 		mode?: IDBTransactionMode
-	): StrictTransaction<S, [N]>
-	transaction<NN extends SchemaObjectStoreName<S>[]>(
-		storeNames: NN,
+	): StrictTransaction<S, [TN]>
+	transaction<TN extends SchemaObjectStoreName<S>[]>(
+		storeNames: TN,
 		mode?: IDBTransactionMode
-	): StrictTransaction<S, NN>
+	): StrictTransaction<S, TN>
 }
 
 interface StrictTransaction<
 	S extends Schema,
-	NN extends SchemaObjectStoreName<S>[]
+	TN extends SchemaObjectStoreName<S>[]
 > extends Transaction {
 	readonly db: StrictDatabase<S>
-	objectStore<N extends NN[number]>(name: N): StrictObjectStore<S, N>
+	objectStore<N extends TN[number]>(name: N): StrictObjectStore<S, N, TN>
 }
 
 interface StrictObjectStore<
 	S extends Schema,
-	N extends SchemaObjectStoreName<S>
+	N extends SchemaObjectStoreName<S>,
+	TN extends SchemaObjectStoreName<S>[]
 > extends ObjectStore {
 	readonly name: N extends string ? N : never
 	index<I extends SchemaObjectStoreIndexName<S, N>>(
 		name: I
-	): StrictIndex<S, N, I>
+	): StrictIndex<S, N, TN, I>
 	add(
 		value: SchemaObjectStoreValue<S, N>,
 		key?: SchemaObjectStoreKey<S, N>
-	): Promise<SchemaObjectStoreKey<S, N>>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>>
 	put(
 		value: SchemaObjectStoreValue<S, N>,
 		key?: SchemaObjectStoreKey<S, N>
-	): Promise<SchemaObjectStoreKey<S, N>>
-	delete(query: SchemaObjectStoreKey<S, N> | IDBKeyRange): Promise<undefined>
-	count(query?: SchemaObjectStoreKey<S, N> | IDBKeyRange): Promise<number>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>>
+	delete(
+		query: SchemaObjectStoreKey<S, N> | IDBKeyRange
+	): StrictThenableRequest<S, N, TN, undefined>
+	count(
+		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange
+	): StrictThenableRequest<S, N, TN, number>
 	get(
 		query: SchemaObjectStoreKey<S, N> | IDBKeyRange
-	): Promise<SchemaObjectStoreValue<S, N>>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreValue<S, N>>
 	getAll(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		count?: number
-	): Promise<SchemaObjectStoreValue<S, N>[]>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreValue<S, N>[]>
 	getKey(
 		query: SchemaObjectStoreKey<S, N> | IDBKeyRange
-	): Promise<SchemaObjectStoreKey<S, N> | undefined>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N> | undefined>
 	getAllKeys(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		count?: number
-	): Promise<SchemaObjectStoreKey<S, N>[]>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>[]>
 	createIndex<I extends SchemaObjectStoreIndexName<S, N>>(
 		name: I,
 		keyPath: string | Iterable<string>,
 		options?: IDBIndexParameters
-	): StrictIndex<S, N, I>
+	): StrictIndex<S, N, TN, I>
 	deleteIndex<I extends SchemaObjectStoreIndexName<S, N>>(name: I): void
 	openCursor(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): AsyncIterable<StrictCursorWithValue<S, N>>
+	): StrictIterableRequest<S, N, TN, StrictCursorWithValue<S, N, TN>>
 	openKeyCursor(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): AsyncIterable<StrictCursor<S, N>>
+	): StrictIterableRequest<S, N, TN, StrictCursor<S, N, TN>>
+}
+
+interface StrictIterableRequest<
+	S extends Schema,
+	N extends SchemaObjectStoreName<S>,
+	TN extends SchemaObjectStoreName<S>[],
+	T
+> extends IterableRequest<T> {
+	transaction: StrictTransaction<S, TN>
+}
+
+interface StrictThenableRequest<
+	S extends Schema,
+	N extends SchemaObjectStoreName<S>,
+	TN extends SchemaObjectStoreName<S>[],
+	T
+> extends ThenableRequest<T> {
+	transaction: StrictTransaction<S, TN>
 }
 
 interface StrictIndex<
 	S extends Schema,
 	N extends SchemaObjectStoreName<S>,
+	TN extends SchemaObjectStoreName<S>[],
 	I extends SchemaObjectStoreIndexName<S, N>
 > extends Index {
-	readonly objectStore: StrictObjectStore<S, N>
+	readonly objectStore: StrictObjectStore<S, N, TN>
 	readonly name: I extends string ? I : never
 	count<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query?: K | IDBKeyRange
-	): Promise<number>
+	): ThenableRequest<number>
 	get<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query: K | IDBKeyRange
-	): Promise<SchemaObjectStoreValue<S, N>>
+	): ThenableRequest<SchemaObjectStoreValue<S, N>>
 	getAll<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query?: K | IDBKeyRange | null,
 		count?: number
-	): Promise<SchemaObjectStoreValue<S, N>[]>
+	): ThenableRequest<SchemaObjectStoreValue<S, N>[]>
 	getKey<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query: K | IDBKeyRange
-	): Promise<SchemaObjectStoreKey<S, N> | undefined>
+	): ThenableRequest<SchemaObjectStoreKey<S, N> | undefined>
 	getAllKeys<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query?: K | IDBKeyRange | null,
 		count?: number
-	): Promise<SchemaObjectStoreKey<S, N>[]>
+	): ThenableRequest<SchemaObjectStoreKey<S, N>[]>
 	openCursor<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		range?: K | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): AsyncIterable<StrictCursorWithValue<S, N, I>>
+	): StrictIterableRequest<S, N, TN, StrictCursorWithValue<S, N, TN, I>>
 	openKeyCursor<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		range?: K | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): AsyncIterable<StrictCursor<S, N, I>>
+	): StrictIterableRequest<S, N, TN, StrictCursor<S, N, TN, I>>
 }
 
 interface StrictCursorWithValue<
 	S extends Schema,
 	N extends SchemaObjectStoreName<S>,
+	TN extends SchemaObjectStoreName<S>[],
 	I extends SchemaObjectStoreIndexName<S, N> | unknown = unknown
 > extends CursorWithValue {
+	readonly key: I extends SchemaObjectStoreIndexName<S, N>
+		? SchemaObjectStoreIndexKey<S, N, I>
+		: SchemaObjectStoreKey<S, N>
+	readonly primaryKey: SchemaObjectStoreKey<S, N>
 	readonly value: SchemaObjectStoreValue<S, N>
 	readonly source: I extends SchemaObjectStoreIndexName<S, N>
-		? StrictIndex<S, N, I>
-		: StrictObjectStore<S, N>
+		? StrictIndex<S, N, TN, I>
+		: StrictObjectStore<S, N, TN>
 	update(
 		value: SchemaObjectStoreValue<S, N>
-	): Promise<SchemaObjectStoreKey<S, N>>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>>
 }
 
 interface StrictCursor<
 	S extends Schema,
 	N extends SchemaObjectStoreName<S>,
+	TN extends SchemaObjectStoreName<S>[],
 	I extends SchemaObjectStoreIndexName<S, N> | unknown = unknown
 > extends Cursor {
+	readonly key: I extends SchemaObjectStoreIndexName<S, N>
+		? SchemaObjectStoreIndexKey<S, N, I>
+		: SchemaObjectStoreKey<S, N>
+	readonly primaryKey: SchemaObjectStoreKey<S, N>
 	readonly source: I extends SchemaObjectStoreIndexName<S, N>
-		? StrictIndex<S, N, I>
-		: StrictObjectStore<S, N>
+		? StrictIndex<S, N, TN, I>
+		: StrictObjectStore<S, N, TN>
 	update(
 		value: SchemaObjectStoreValue<S, N>
-	): Promise<SchemaObjectStoreKey<S, N>>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>>
 }
 
 type Migration = (tx: Transaction) => void | Promise<void>
@@ -274,29 +321,27 @@ function wrap(value: any): any {
 	const newValue = wrapValue(value)
 
 	if (newValue !== value) {
-		if (!(value instanceof IDBRequest)) {
-			wrapMap.set(value, newValue)
-		}
+		wrapMap.set(value, newValue)
 		inverseWrapMap.set(newValue, value)
 	}
 
 	return newValue
 }
 
-const transactionPromiseMap = new WeakMap()
-
 const proxyTargets = [
 	IDBDatabase,
 	IDBTransaction,
 	IDBObjectStore,
+	IDBRequest,
 	IDBIndex,
 	IDBCursor,
 ]
 
+const then = 'then'
 const proxyHandler: ProxyHandler<any> = {
 	get(target, prop) {
-		if (prop === 'promise' && target instanceof IDBTransaction) {
-			return transactionPromiseMap.get(target)
+		if ((prop === then || prop === Symbol.asyncIterator) && prop in target) {
+			return target[prop]
 		}
 		return wrap(target[prop])
 	},
@@ -307,33 +352,72 @@ const proxyHandler: ProxyHandler<any> = {
 	},
 
 	has(target, prop) {
-		if (prop === 'promise' && target instanceof IDBTransaction) {
-			return true
-		}
 		return prop in target
 	},
 }
 
-function wrapValue(value: any): any {
-	if (value instanceof IDBRequest) {
-		return wrapRequest(value)
-	}
+const cursorRequest = Symbol('cursor')
 
+function wrapValue(value: any): any {
 	if (typeof value === 'function') {
 		return wrapFunction(value)
 	}
 
 	if (proxyTargets.some(type => value instanceof type)) {
+		if (value instanceof IDBRequest) {
+			if (cursorRequest in value) {
+				value = wrapCursorRequest(value)
+			} else {
+				value = wrapRequest(value)
+			}
+		}
+
 		if (value instanceof IDBTransaction) {
 			value = wrapTransaction(value)
 		}
+
 		return new Proxy(value, proxyHandler)
 	}
 
 	return value
 }
 
-function wrapRequest<T>(input: IDBRequest<T>): Promise<Wrap<T>> {
+function wrapRequest<T>(input: IDBRequest<T>): ThenableRequest<Wrap<T>> {
+	const promise = requestPromise(input)
+
+	return Object.defineProperty(input as any, then, {
+		value(
+			onfulfilled: (value: Wrap<T>) => Wrap<T>,
+			onrejected: (reason: any) => any
+		) {
+			return promise.then(onfulfilled, onrejected)
+		},
+	})
+}
+
+function wrapCursorRequest<T extends IDBCursor>(
+	value: IDBRequest<T>
+): IterableRequest<Wrap<T>> {
+	let promise = requestPromise(value)
+
+	return Object.defineProperty(value as any, Symbol.asyncIterator, {
+		value() {
+			return {
+				next() {
+					return promise.then(cursor => {
+						if (cursor) {
+							promise = requestPromise(value)
+							return { value: cursor, done: false }
+						}
+						return { value: undefined, done: true }
+					})
+				},
+			}
+		},
+	})
+}
+
+function requestPromise<T>(input: IDBRequest<T>): Promise<Wrap<T>> {
 	const controller = new AbortController()
 	const options = { once: true, signal: controller.signal }
 
@@ -355,28 +439,7 @@ function wrapRequest<T>(input: IDBRequest<T>): Promise<Wrap<T>> {
 	})
 }
 
-function wrapCursorRequest<T extends IDBCursor>(
-	value: IDBRequest<T>
-): AsyncIterable<Wrap<T>> {
-	let promise = wrapRequest(value)
-	return {
-		[Symbol.asyncIterator]() {
-			return {
-				next() {
-					return promise.then(cursor => {
-						if (cursor) {
-							promise = wrapRequest(value)
-							return { value: cursor, done: false }
-						}
-						return { value: undefined, done: true }
-					})
-				},
-			}
-		},
-	}
-}
-
-function wrapTransaction(value: IDBTransaction): IDBTransaction {
+function wrapTransaction(value: IDBTransaction): Transaction {
 	const controller = new AbortController()
 	const options = { once: true, signal: controller.signal }
 
@@ -398,12 +461,14 @@ function wrapTransaction(value: IDBTransaction): IDBTransaction {
 		}
 	})
 
-	transactionPromiseMap.set(value, promise)
-
-	return value
+	return Object.defineProperty(value as any, then, {
+		value(onfulfilled: (value: any) => any, onrejected: (reason: any) => any) {
+			return promise.then(onfulfilled, onrejected)
+		},
+	})
 }
 
-const cursorReturnMethods = [
+const cursorRequestMethods = [
 	IDBObjectStore.prototype.openCursor,
 	IDBObjectStore.prototype.openKeyCursor,
 	IDBIndex.prototype.openCursor,
@@ -415,8 +480,8 @@ function wrapFunction<T extends AnyFunction>(value: T) {
 		const originalThis = inverseWrapMap.get(this) || this
 		const result = value.apply(originalThis, args)
 
-		if (cursorReturnMethods.includes(value)) {
-			return wrapCursorRequest(result)
+		if (cursorRequestMethods.includes(value)) {
+			Object.defineProperty(result, cursorRequest, { value: true })
 		}
 
 		return wrap(result)
