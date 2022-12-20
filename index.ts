@@ -5,14 +5,13 @@ interface Transaction extends Wrap<IDBTransaction> {
 		onRejected?: (reason: any) => U | PromiseLike<U>
 	): Promise<U>
 }
-interface Request<T> extends Wrap<IDBRequest<T>> {}
-interface ThenableRequest<T> extends Request<T> {
+interface ThenableRequest<T> extends Wrap<IDBRequest<T>> {
 	then<U>(
 		onFulfilled?: (value: T) => U | PromiseLike<U>,
 		onRejected?: (reason: any) => U | PromiseLike<U>
 	): Promise<U>
 }
-interface IterableRequest<T> extends Request<T> {
+interface IterableRequest<T> extends Wrap<IDBRequest<T>> {
 	[Symbol.asyncIterator](): AsyncIterator<Wrap<T>>
 }
 interface ObjectStore extends Wrap<IDBObjectStore> {}
@@ -22,7 +21,7 @@ interface Cursor extends Wrap<IDBCursor> {}
 
 type AnyFunction = (...args: any[]) => any
 type ReplaceReturnType<F extends AnyFunction, R> = (...args: Parameters<F>) => R
-type Map<T> = T extends IDBDatabase
+type Remap<T> = T extends IDBDatabase
 	? Database
 	: T extends IDBTransaction
 	? Transaction
@@ -45,21 +44,115 @@ type WrapProp<P> = P extends (...args: any[]) => infer R
 			? ReplaceReturnType<P, IterableRequest<Cursor>>
 			: T extends IDBValidKey | undefined
 			? ReplaceReturnType<P, ThenableRequest<IDBValidKey | undefined>>
-			: ReplaceReturnType<P, ThenableRequest<Map<T>>>
-		: ReplaceReturnType<P, Map<R>>
-	: Map<P>
+			: ReplaceReturnType<P, ThenableRequest<Remap<T>>>
+		: ReplaceReturnType<P, Remap<R>>
+	: Remap<P>
+
 type Wrap<O> = {
 	[K in keyof O]: WrapProp<O[K]>
 }
 
-type Schema = {
-	[name: string]: {
-		key: IDBValidKey
-		value: any
-		indexes: {
-			[s: string]: IDBValidKey
-		}
+type ValidKey = number | string | Date | BufferSource
+
+type Path<T, U extends string = ''> = T extends object
+	? {
+			[K in keyof T]: K extends string
+				? Path<T[K], U extends '' ? K : `${U}.${K}`>
+				: U
+	  }[keyof T]
+	: T extends ValidKey
+	? U
+	: never
+
+type SplitPath<T extends string> = T extends `${infer L}.${infer R}`
+	? [L, ...SplitPath<R>]
+	: [T]
+
+type PathHead<T> = T extends ''
+	? never
+	: T extends `${infer H}.${string}`
+	? H
+	: T extends `${infer H}`
+	? H
+	: never
+type PathTail<T> = T extends `${string}.${infer R}` ? R : never
+type PathType<T, P extends string> = PathHead<P> extends keyof T
+	? T[PathHead<P>] extends object
+		? PathTail<P> extends never
+			? never
+			: PathType<T[PathHead<P>], PathTail<P>>
+		: T[PathHead<P>]
+	: never
+
+type ArrayHead<T extends any[]> = T extends [] ? never : T[0]
+type ArrayTail<T extends any[]> = T extends [any]
+	? never
+	: T extends [any, ...infer U]
+	? U
+	: never
+type ArrayPathType<
+	O,
+	T extends any[],
+	U extends any[] = []
+> = ArrayHead<T> extends never
+	? U
+	: ArrayPathType<O, ArrayTail<T>, [...U, PathType<O, T[0]>]>
+
+type KeyPathType<T, K> = K extends string
+	? PathType<T, K>
+	: K extends string[]
+	? ArrayPathType<T, K>
+	: never
+
+type ValidStore<T> = {
+	key: Path<T> | Path<T>[]
+	value: T
+	indexes?: {
+		[s: string]: Path<T> | Path<T>[]
 	}
+}
+
+type ValidSchema<T extends ValidSchema<T> = ValidSchema<any>> = {
+	[K in keyof T]: ValidStore<T[K]['value']>
+}
+
+type ValidSchemaKey = string | string[]
+type ValidSchemaIndexes =
+	| {
+			[s: string]: string | string[]
+	  }
+	| undefined
+
+type RemappedStore<
+	T,
+	K extends ValidSchemaKey,
+	I extends ValidSchemaIndexes
+> = {
+	key: KeyPathType<T, K>
+	value: T
+	indexes: I extends object
+		? {
+				[K in keyof I]: KeyPathType<T, I[K]>
+		  }
+		: undefined
+}
+
+type RemappedSchema<T extends ValidSchema<T>> = {
+	[K in keyof T]: RemappedStore<T[K]['value'], T[K]['key'], T[K]['indexes']>
+}
+
+export type Validate<T extends ValidSchema<T>> = RemappedSchema<T>
+
+type Store = {
+	key: IDBValidKey
+	value: any
+	indexes: {
+		[s: string]: IDBValidKey
+	}
+}
+
+type Schema = {
+	[name: string]: Store
 }
 
 type SchemaObjectStoreName<S extends Schema> = keyof S
