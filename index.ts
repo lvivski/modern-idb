@@ -104,29 +104,13 @@ type KeyPathType<T, K> = K extends string
 	? ArrayPathType<T, K>
 	: never
 
-type ValidStore<T> = {
-	key: Path<T> | Path<T>[]
-	value: T
-	indexes?: {
-		[s: string]: Path<T> | Path<T>[]
-	}
-}
-
-type ValidSchema<T extends ValidSchema<T> = ValidSchema<any>> = {
-	[K in keyof T]: ValidStore<T[K]['value']>
-}
-
-type ValidSchemaKey = string | string[]
-type ValidSchemaIndexes =
-	| {
-			[s: string]: string | string[]
-	  }
-	| undefined
+type OriginalStoreKey = string | string[]
+type OriginalStoreIndexes = { [s: string]: OriginalStoreKey } | undefined
 
 type RemappedStore<
 	T,
-	K extends ValidSchemaKey,
-	I extends ValidSchemaIndexes
+	K extends OriginalStoreKey,
+	I extends OriginalStoreIndexes
 > = {
 	key: KeyPathType<T, K>
 	value: T
@@ -139,6 +123,19 @@ type RemappedStore<
 
 type RemappedSchema<T extends ValidSchema<T>> = {
 	[K in keyof T]: RemappedStore<T[K]['value'], T[K]['key'], T[K]['indexes']>
+}
+
+type ValidStoreKey<T> = Path<T> | Path<T>[]
+type ValidStore<T> = {
+	key: ValidStoreKey<T>
+	value: T
+	indexes?: {
+		[s: string]: ValidStoreKey<T>
+	}
+}
+
+type ValidSchema<T extends ValidSchema<T>> = {
+	[K in keyof T]: ValidStore<T[K]['value']>
 }
 
 export type Validate<T extends ValidSchema<T>> = RemappedSchema<T>
