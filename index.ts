@@ -14,7 +14,33 @@ interface ThenableRequest<T> extends Wrap<IDBRequest<T>> {
 interface IterableRequest<T> extends Wrap<IDBRequest<T>> {
 	[Symbol.asyncIterator](): AsyncIterator<T>
 }
-interface ObjectStore extends Wrap<IDBObjectStore> {}
+interface ObjectStore extends Wrap<IDBObjectStore> {
+	add(value: any, key?: IDBValidKey): ThenableRequest<IDBValidKey>
+	clear(): ThenableRequest<undefined>
+	count(query?: IDBValidKey | IDBKeyRange): ThenableRequest<number>
+	delete(query: IDBValidKey | IDBKeyRange): ThenableRequest<undefined>
+	get(query: IDBValidKey | IDBKeyRange): ThenableRequest<any>
+	getAll(
+		query?: IDBValidKey | IDBKeyRange | null,
+		count?: number
+	): ThenableRequest<any[]>
+	getAllKeys(
+		query?: IDBValidKey | IDBKeyRange | null,
+		count?: number
+	): ThenableRequest<IDBValidKey[]>
+	getKey(
+		query: IDBValidKey | IDBKeyRange
+	): ThenableRequest<IDBValidKey | undefined>
+	openCursor(
+		query?: IDBValidKey | IDBKeyRange | null,
+		direction?: IDBCursorDirection
+	): IterableRequest<CursorWithValue>
+	openKeyCursor(
+		query?: IDBValidKey | IDBKeyRange | null,
+		direction?: IDBCursorDirection
+	): IterableRequest<Cursor>
+	put(value: any, key?: IDBValidKey): ThenableRequest<IDBValidKey>
+}
 interface Index extends Wrap<IDBIndex> {
 	count(query?: IDBValidKey | IDBKeyRange): ThenableRequest<number>
 	get(query: IDBValidKey | IDBKeyRange): ThenableRequest<any>
@@ -32,17 +58,20 @@ interface Index extends Wrap<IDBIndex> {
 	openCursor(
 		query?: IDBValidKey | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): IterableRequest<IDBCursorWithValue>
+	): IterableRequest<CursorWithValue>
 	openKeyCursor(
 		query?: IDBValidKey | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): IterableRequest<IDBCursor>
+	): IterableRequest<Cursor>
 }
-
-type a = Index['count']
-
-interface CursorWithValue extends Wrap<IDBCursorWithValue> {}
-interface Cursor extends Wrap<IDBCursor> {}
+interface CursorWithValue extends Wrap<IDBCursorWithValue> {
+	delete(): ThenableRequest<undefined>
+	update(value: any): ThenableRequest<IDBValidKey>
+}
+interface Cursor extends Wrap<IDBCursor> {
+	delete(): ThenableRequest<undefined>
+	update(value: any): ThenableRequest<IDBValidKey>
+}
 
 type AnyFunction = (...args: any[]) => any
 type ReplaceReturnType<F extends AnyFunction, R> = (...args: Parameters<F>) => R
@@ -70,7 +99,7 @@ type WrapProp<K, P> = K extends 'result'
 			? ReplaceReturnType<P, IterableRequest<CursorWithValue>>
 			: K extends 'openKeyCursor'
 			? ReplaceReturnType<P, IterableRequest<Cursor>>
-			: K extends 'add' | 'put'
+			: K extends 'add' | 'put' | 'update'
 			? ReplaceReturnType<P, ThenableRequest<IDBValidKey>>
 			: K extends 'getKey'
 			? ReplaceReturnType<P, ThenableRequest<IDBValidKey | undefined>>
@@ -80,12 +109,8 @@ type WrapProp<K, P> = K extends 'result'
 		: ReplaceReturnType<P, Remap<R>>
 	: Remap<P>
 
-type WrapIndexProp<K, P> = P extends AnyFunction ? P : Remap<P>
-
 type Wrap<O> = {
-	[K in keyof O]: O extends IDBIndex
-		? WrapIndexProp<K, O[K]>
-		: WrapProp<K, O[K]>
+	[K in keyof O]: WrapProp<K, O[K]>
 }
 
 type ValidKey = number | string | Date | BufferSource
