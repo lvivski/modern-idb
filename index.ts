@@ -12,10 +12,35 @@ interface ThenableRequest<T> extends Wrap<IDBRequest<T>> {
 	): Promise<U>
 }
 interface IterableRequest<T> extends Wrap<IDBRequest<T>> {
-	[Symbol.asyncIterator](): AsyncIterator<Exclude<T, null>>
+	[Symbol.asyncIterator](): AsyncIterator<T>
 }
 interface ObjectStore extends Wrap<IDBObjectStore> {}
-interface Index extends Wrap<IDBIndex> {}
+interface Index extends Wrap<IDBIndex> {
+	// count(query?: IDBValidKey | IDBKeyRange): ThenableRequest<number>
+	get(query: IDBValidKey | IDBKeyRange): ThenableRequest<any>
+	getAll(
+		query?: IDBValidKey | IDBKeyRange | null,
+		count?: number
+	): ThenableRequest<any[]>
+	getAllKeys(
+		query?: IDBValidKey | IDBKeyRange | null,
+		count?: number
+	): ThenableRequest<IDBValidKey[]>
+	getKey(
+		query: IDBValidKey | IDBKeyRange
+	): ThenableRequest<IDBValidKey | undefined>
+	openCursor(
+		query?: IDBValidKey | IDBKeyRange | null,
+		direction?: IDBCursorDirection
+	): IterableRequest<IDBCursorWithValue>
+	openKeyCursor(
+		query?: IDBValidKey | IDBKeyRange | null,
+		direction?: IDBCursorDirection
+	): IterableRequest<IDBCursor>
+}
+
+type a = Index['count']
+
 interface CursorWithValue extends Wrap<IDBCursorWithValue> {}
 interface Cursor extends Wrap<IDBCursor> {}
 
@@ -42,9 +67,9 @@ type WrapProp<K, P> = K extends 'result'
 	: P extends (...args: any[]) => infer R
 	? R extends IDBRequest<infer T>
 		? K extends 'openCursor'
-			? ReplaceReturnType<P, IterableRequest<CursorWithValue | null>>
+			? ReplaceReturnType<P, IterableRequest<CursorWithValue>>
 			: K extends 'openKeyCursor'
-			? ReplaceReturnType<P, IterableRequest<Cursor | null>>
+			? ReplaceReturnType<P, IterableRequest<Cursor>>
 			: K extends 'add' | 'put'
 			? ReplaceReturnType<P, ThenableRequest<IDBValidKey>>
 			: K extends 'getKey'
@@ -55,8 +80,12 @@ type WrapProp<K, P> = K extends 'result'
 		: ReplaceReturnType<P, Remap<R>>
 	: Remap<P>
 
+type WrapIndexProp<K, P> = P extends AnyFunction ? P : Remap<P>
+
 type Wrap<O> = {
-	[K in keyof O]: WrapProp<K, O[K]>
+	[K in keyof O]: O extends IDBIndex
+		? WrapIndexProp<K, O[K]>
+		: WrapProp<K, O[K]>
 }
 
 type ValidKey = number | string | Date | BufferSource
@@ -223,57 +252,39 @@ interface StrictObjectStore<
 	add(
 		value: SchemaObjectStoreValue<S, N>,
 		key?: SchemaObjectStoreKey<S, N>
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>>
+	): ThenableRequest<SchemaObjectStoreKey<S, N>>
 	put(
 		value: SchemaObjectStoreValue<S, N>,
 		key?: SchemaObjectStoreKey<S, N>
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>>
+	): ThenableRequest<SchemaObjectStoreKey<S, N>>
 	delete(
 		query: SchemaObjectStoreKey<S, N> | IDBKeyRange
-	): StrictThenableRequest<S, N, TN, undefined>
+	): ThenableRequest<undefined>
 	count(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange
-	): StrictThenableRequest<S, N, TN, number>
+	): ThenableRequest<number>
 	get(
 		query: SchemaObjectStoreKey<S, N> | IDBKeyRange
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreValue<S, N>>
+	): ThenableRequest<SchemaObjectStoreValue<S, N>>
 	getAll(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		count?: number
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreValue<S, N>[]>
+	): ThenableRequest<SchemaObjectStoreValue<S, N>[]>
 	getKey(
 		query: SchemaObjectStoreKey<S, N> | IDBKeyRange
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N> | undefined>
+	): ThenableRequest<SchemaObjectStoreKey<S, N> | undefined>
 	getAllKeys(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		count?: number
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>[]>
+	): ThenableRequest<SchemaObjectStoreKey<S, N>[]>
 	openCursor(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): StrictIterableRequest<S, N, TN, StrictCursorWithValue<S, N, TN>>
+	): IterableRequest<StrictCursorWithValue<S, N, TN>>
 	openKeyCursor(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): StrictIterableRequest<S, N, TN, StrictCursor<S, N, TN>>
-}
-
-interface StrictIterableRequest<
-	S extends Schema,
-	N extends SchemaObjectStoreName<S>,
-	TN extends SchemaObjectStoreName<S>[],
-	T
-> extends IterableRequest<T> {
-	transaction: StrictTransaction<S, TN>
-}
-
-interface StrictThenableRequest<
-	S extends Schema,
-	N extends SchemaObjectStoreName<S>,
-	TN extends SchemaObjectStoreName<S>[],
-	T
-> extends ThenableRequest<T> {
-	transaction: StrictTransaction<S, TN>
+	): IterableRequest<StrictCursor<S, N, TN>>
 }
 
 interface StrictIndex<
@@ -284,31 +295,31 @@ interface StrictIndex<
 > extends Index {
 	readonly objectStore: StrictObjectStore<S, N, TN>
 	readonly name: I extends string ? I : never
-	count<K = SchemaObjectStoreIndexKey<S, N, I>>(
+	count<K extends SchemaObjectStoreIndexKey<S, N, I>>(
 		query?: K | IDBKeyRange
-	): StrictThenableRequest<S, N, TN, number>
-	get<K = SchemaObjectStoreIndexKey<S, N, I>>(
+	): ThenableRequest<number>
+	get<K extends SchemaObjectStoreIndexKey<S, N, I>>(
 		query: K | IDBKeyRange
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreValue<S, N>>
-	getAll<K = SchemaObjectStoreIndexKey<S, N, I>>(
+	): ThenableRequest<SchemaObjectStoreValue<S, N>>
+	getAll<K extends SchemaObjectStoreIndexKey<S, N, I>>(
 		query?: K | IDBKeyRange | null,
 		count?: number
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreValue<S, N>[]>
-	getKey<K = SchemaObjectStoreIndexKey<S, N, I>>(
+	): ThenableRequest<SchemaObjectStoreValue<S, N>[]>
+	getKey<K extends SchemaObjectStoreIndexKey<S, N, I>>(
 		query: K | IDBKeyRange
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N> | undefined>
-	getAllKeys<K = SchemaObjectStoreIndexKey<S, N, I>>(
+	): ThenableRequest<SchemaObjectStoreKey<S, N> | undefined>
+	getAllKeys<K extends SchemaObjectStoreIndexKey<S, N, I>>(
 		query?: K | IDBKeyRange | null,
 		count?: number
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>[]>
-	openCursor<K = SchemaObjectStoreIndexKey<S, N, I>>(
+	): ThenableRequest<SchemaObjectStoreKey<S, N>[]>
+	openCursor<K extends SchemaObjectStoreIndexKey<S, N, I>>(
 		range?: K | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): StrictIterableRequest<S, N, TN, StrictCursorWithValue<S, N, TN, I>>
-	openKeyCursor<K = SchemaObjectStoreIndexKey<S, N, I>>(
+	): IterableRequest<StrictCursorWithValue<S, N, TN, I>>
+	openKeyCursor<K extends SchemaObjectStoreIndexKey<S, N, I>>(
 		range?: K | IDBKeyRange | null,
 		direction?: IDBCursorDirection
-	): StrictIterableRequest<S, N, TN, StrictCursor<S, N, TN, I>>
+	): IterableRequest<StrictCursor<S, N, TN, I>>
 }
 
 interface StrictCursorWithValue<
@@ -327,7 +338,7 @@ interface StrictCursorWithValue<
 		: StrictObjectStore<S, N, TN>
 	update(
 		value: SchemaObjectStoreValue<S, N>
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>>
+	): ThenableRequest<SchemaObjectStoreKey<S, N>>
 }
 
 interface StrictCursor<
@@ -345,7 +356,7 @@ interface StrictCursor<
 		: StrictObjectStore<S, N, TN>
 	update(
 		value: SchemaObjectStoreValue<S, N>
-	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>>
+	): ThenableRequest<SchemaObjectStoreKey<S, N>>
 }
 
 type Migration = (tx: Transaction) => void | Promise<void>
