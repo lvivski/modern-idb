@@ -16,7 +16,7 @@ interface IterableRequest<T> extends Wrap<IDBRequest<T>> {
 }
 interface ObjectStore extends Wrap<IDBObjectStore> {}
 interface Index extends Wrap<IDBIndex> {
-	// count(query?: IDBValidKey | IDBKeyRange): ThenableRequest<number>
+	count(query?: IDBValidKey | IDBKeyRange): ThenableRequest<number>
 	get(query: IDBValidKey | IDBKeyRange): ThenableRequest<any>
 	getAll(
 		query?: IDBValidKey | IDBKeyRange | null,
