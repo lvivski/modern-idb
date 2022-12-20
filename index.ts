@@ -12,7 +12,7 @@ interface ThenableRequest<T> extends Wrap<IDBRequest<T>> {
 	): Promise<U>
 }
 interface IterableRequest<T> extends Wrap<IDBRequest<T>> {
-	[Symbol.asyncIterator](): AsyncIterator<Wrap<T>>
+	[Symbol.asyncIterator](): AsyncIterator<Exclude<T, null>>
 }
 interface ObjectStore extends Wrap<IDBObjectStore> {}
 interface Index extends Wrap<IDBIndex> {}
@@ -36,20 +36,27 @@ type Remap<T> = T extends IDBDatabase
 	: T extends IDBCursor
 	? Cursor
 	: T
-type WrapProp<P> = P extends (...args: any[]) => infer R
+
+type WrapProp<K, P> = K extends 'result'
+	? P
+	: P extends (...args: any[]) => infer R
 	? R extends IDBRequest<infer T>
-		? T extends IDBCursorWithValue | null
-			? ReplaceReturnType<P, IterableRequest<CursorWithValue>>
-			: T extends IDBCursor | null
-			? ReplaceReturnType<P, IterableRequest<Cursor>>
-			: T extends IDBValidKey | undefined
+		? K extends 'openCursor'
+			? ReplaceReturnType<P, IterableRequest<CursorWithValue | null>>
+			: K extends 'openKeyCursor'
+			? ReplaceReturnType<P, IterableRequest<Cursor | null>>
+			: K extends 'add' | 'put'
+			? ReplaceReturnType<P, ThenableRequest<IDBValidKey>>
+			: K extends 'getKey'
 			? ReplaceReturnType<P, ThenableRequest<IDBValidKey | undefined>>
+			: K extends 'getAllKeys'
+			? ReplaceReturnType<P, ThenableRequest<IDBValidKey[]>>
 			: ReplaceReturnType<P, ThenableRequest<Remap<T>>>
 		: ReplaceReturnType<P, Remap<R>>
 	: Remap<P>
 
 type Wrap<O> = {
-	[K in keyof O]: WrapProp<O[K]>
+	[K in keyof O]: WrapProp<K, O[K]>
 }
 
 type ValidKey = number | string | Date | BufferSource
@@ -241,12 +248,6 @@ interface StrictObjectStore<
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		count?: number
 	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>[]>
-	createIndex<I extends SchemaObjectStoreIndexName<S, N>>(
-		name: I,
-		keyPath: string | Iterable<string>,
-		options?: IDBIndexParameters
-	): StrictIndex<S, N, TN, I>
-	deleteIndex<I extends SchemaObjectStoreIndexName<S, N>>(name: I): void
 	openCursor(
 		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
 		direction?: IDBCursorDirection
@@ -285,21 +286,21 @@ interface StrictIndex<
 	readonly name: I extends string ? I : never
 	count<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query?: K | IDBKeyRange
-	): ThenableRequest<number>
+	): StrictThenableRequest<S, N, TN, number>
 	get<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query: K | IDBKeyRange
-	): ThenableRequest<SchemaObjectStoreValue<S, N>>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreValue<S, N>>
 	getAll<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query?: K | IDBKeyRange | null,
 		count?: number
-	): ThenableRequest<SchemaObjectStoreValue<S, N>[]>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreValue<S, N>[]>
 	getKey<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query: K | IDBKeyRange
-	): ThenableRequest<SchemaObjectStoreKey<S, N> | undefined>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N> | undefined>
 	getAllKeys<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		query?: K | IDBKeyRange | null,
 		count?: number
-	): ThenableRequest<SchemaObjectStoreKey<S, N>[]>
+	): StrictThenableRequest<S, N, TN, SchemaObjectStoreKey<S, N>[]>
 	openCursor<K = SchemaObjectStoreIndexKey<S, N, I>>(
 		range?: K | IDBKeyRange | null,
 		direction?: IDBCursorDirection
