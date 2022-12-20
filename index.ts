@@ -186,11 +186,6 @@ type SchemaObjectStoreIndexKey<
 > = SchemaObjectStoreIndex<S, N>[I]
 
 interface StrictDatabase<S extends Schema> extends Database {
-	createObjectStore<N extends SchemaObjectStoreName<S>>(
-		name: N,
-		options?: IDBObjectStoreParameters
-	): StrictObjectStore<S, N, N[]>
-	deleteObjectStore<N extends SchemaObjectStoreName<S>>(name: N): void
 	transaction<TN extends SchemaObjectStoreName<S>>(
 		storeNames: TN,
 		mode?: IDBTransactionMode
