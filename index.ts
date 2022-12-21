@@ -169,7 +169,8 @@ type KeyPathType<T, K> = K extends string
 
 type ValidStoreKey<T> = Path<T> | Path<T>[]
 type ValidStore<T> = {
-	key: ValidStoreKey<T>
+	key: ValidStoreKey<T> | null
+	autoIncrement?: boolean
 	value: T
 	indexes: {
 		[s: string]: ValidStoreKey<T>
@@ -183,7 +184,8 @@ type ValidSchema<T extends ValidSchema<T>> = {
 export type Validate<T extends ValidSchema<T>> = T
 
 type Store = {
-	key: string | string[]
+	key: string | string[] | null
+	autoIncrement?: boolean
 	value: any
 	indexes: {
 		[s: string]: string | string[]
@@ -206,15 +208,26 @@ type SchemaObjectStoreKey<
 	N extends SchemaObjectStoreName<S>
 > = SchemaObjectStore<S, N>['key']
 
+type SchemaObjectStoreKeyType<
+	S extends Schema,
+	N extends SchemaObjectStoreName<S>
+> = SchemaObjectStoreKey<S, N> extends null
+	? IDBValidKey
+	: KeyPathType<SchemaObjectStoreValue<S, N>, SchemaObjectStoreKey<S, N>>
+type SchemaObjectStoreKeyParam<
+	S extends Schema,
+	N extends SchemaObjectStoreName<S>
+> = SchemaObjectStoreKey<S, N> extends null ? IDBValidKey : never
+
+type SchemaObjectStoreAutoIncrement<
+	S extends Schema,
+	N extends SchemaObjectStoreName<S>
+> = SchemaObjectStore<S, N>['autoIncrement']
+
 type SchemaObjectStoreValue<
 	S extends Schema,
 	N extends SchemaObjectStoreName<S>
 > = SchemaObjectStore<S, N>['value']
-
-type SchemaObjectStoreKeyType<
-	S extends Schema,
-	N extends SchemaObjectStoreName<S>
-> = KeyPathType<SchemaObjectStoreValue<S, N>, SchemaObjectStoreKey<S, N>>
 
 type SchemaObjectStoreIndex<
 	S extends Schema,
@@ -260,6 +273,23 @@ interface StrictTransaction<
 	objectStore<N extends TN[number]>(name: N): StrictObjectStore<S, N, TN>
 }
 
+type StrictObjectStoreInsert<
+	S extends Schema,
+	N extends SchemaObjectStoreName<S>
+> = SchemaObjectStoreKey<S, N> extends null
+	? SchemaObjectStoreAutoIncrement<S, N> extends true
+		? (
+				value: SchemaObjectStoreValue<S, N>,
+				key?: SchemaObjectStoreKeyParam<S, N>
+		  ) => ThenableRequest<SchemaObjectStoreKeyType<S, N>>
+		: (
+				value: SchemaObjectStoreValue<S, N>,
+				key: SchemaObjectStoreKeyParam<S, N>
+		  ) => ThenableRequest<SchemaObjectStoreKeyType<S, N>>
+	: (
+			value: SchemaObjectStoreValue<S, N>
+	  ) => ThenableRequest<SchemaObjectStoreKeyType<S, N>>
+
 interface StrictObjectStore<
 	S extends Schema,
 	N extends SchemaObjectStoreName<S>,
@@ -270,14 +300,8 @@ interface StrictObjectStore<
 	index<I extends SchemaObjectStoreIndexName<S, N>>(
 		name: I
 	): StrictIndex<S, N, TN, I>
-	add(
-		value: SchemaObjectStoreValue<S, N>,
-		key?: SchemaObjectStoreKeyType<S, N>
-	): ThenableRequest<SchemaObjectStoreKeyType<S, N>>
-	put(
-		value: SchemaObjectStoreValue<S, N>,
-		key?: SchemaObjectStoreKeyType<S, N>
-	): ThenableRequest<SchemaObjectStoreKeyType<S, N>>
+	add: StrictObjectStoreInsert<S, N>
+	put: StrictObjectStoreInsert<S, N>
 	delete(
 		query: SchemaObjectStoreKeyType<S, N> | IDBKeyRange
 	): ThenableRequest<undefined>
