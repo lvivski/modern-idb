@@ -137,13 +137,15 @@ type PathHead<T> = T extends ''
 	? H
 	: never
 type PathTail<T> = T extends `${string}.${infer R}` ? R : never
-type PathType<T, P extends string> = PathHead<P> extends keyof T
-	? T[PathHead<P>] extends ValidKey
-		? T[PathHead<P>]
-		: T[PathHead<P>] extends object
-		? PathTail<P> extends never
-			? never
-			: PathType<T[PathHead<P>], PathTail<P>>
+type PathType<T, P extends string> = T extends object
+	? PathHead<P> extends keyof T
+		? T[PathHead<P>] extends ValidKey
+			? T[PathHead<P>]
+			: T[PathHead<P>] extends object
+			? PathTail<P> extends never
+				? never
+				: PathType<T[PathHead<P>], PathTail<P>>
+			: never
 		: never
 	: never
 
@@ -165,6 +167,18 @@ type KeyPathType<T, K> = K extends string
 	? PathType<T, K>
 	: K extends string[]
 	? ArrayPathType<T, K>
+	: never
+
+type PartialPath<T, P extends string> = T extends object
+	? PathHead<P> extends keyof T
+		? T[PathHead<P>] extends object
+			? PathTail<P> extends never
+				? Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
+				: Omit<T, PathHead<P>> & {
+						[K in PathHead<P>]: PartialPath<T[K], PathTail<P>>
+				  }
+			: Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
+		: never
 	: never
 
 type ValidStoreKey<T> = Path<T> | Path<T>[]
@@ -225,6 +239,15 @@ type SchemaObjectStoreValue<
 	N extends SchemaObjectStoreName<S>
 > = SchemaObjectStore<S, N>['value']
 
+type SchemaObjectStoreValuePartial<
+	S extends Schema,
+	N extends SchemaObjectStoreName<S>
+> = SchemaObjectStoreAutoIncrement<S, N> extends true
+	? SchemaObjectStoreKey<S, N> extends string
+		? PartialPath<SchemaObjectStoreValue<S, N>, SchemaObjectStoreKey<S, N>>
+		: SchemaObjectStoreValue<S, N>
+	: SchemaObjectStoreValue<S, N>
+
 type SchemaObjectStoreIndex<
 	S extends Schema,
 	N extends SchemaObjectStoreName<S>
@@ -283,7 +306,7 @@ type StrictObjectStoreInsert<
 				key: K
 		  ) => ThenableRequest<K>
 	: (
-			value: SchemaObjectStoreValue<S, N>
+			value: SchemaObjectStoreValuePartial<S, N>
 	  ) => ThenableRequest<SchemaObjectStoreKeyType<S, N>>
 
 interface StrictObjectStore<
