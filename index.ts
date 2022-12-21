@@ -271,6 +271,7 @@ interface StrictObjectStore<
 	TN extends SchemaObjectStoreName<S>[]
 > extends ObjectStore {
 	readonly name: N extends string ? N : never
+	readonly transaction: StrictTransaction<S, TN>
 	index<I extends SchemaObjectStoreIndexName<S, N>>(
 		name: I
 	): StrictIndex<S, N, TN, I>
