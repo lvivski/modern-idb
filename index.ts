@@ -414,7 +414,7 @@ export function openDatabase<
 		}
 	}
 
-	return wrap(request) as unknown as Promise<DB>
+	return wrap(request) as ThenableRequest<DB>
 }
 
 export function deleteDatabase(
@@ -428,14 +428,14 @@ export function deleteDatabase(
 			blockedCallback(event.oldVersion, event.newVersion)
 		}
 	}
-	return wrap(request) as Promise<undefined>
+	return wrap(request) as ThenableRequest<undefined>
 }
 
 const wrapMap = new WeakMap()
 const inverseWrapMap = new WeakMap()
 
-function wrap(value: IDBOpenDBRequest): Promise<Database | undefined>
-function wrap<T>(value: IDBRequest<T>): Promise<Wrap<T>>
+function wrap(value: IDBOpenDBRequest): ThenableRequest<Database | undefined>
+function wrap<T>(value: IDBRequest<T>): ThenableRequest<Wrap<T>>
 function wrap<T>(value: T): Wrap<T>
 function wrap(value: any): any {
 	if (wrapMap.has(value)) {
