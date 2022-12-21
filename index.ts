@@ -171,7 +171,7 @@ type ValidStoreKey<T> = Path<T> | Path<T>[]
 type ValidStore<T> = {
 	key: ValidStoreKey<T>
 	value: T
-	indexes?: {
+	indexes: {
 		[s: string]: ValidStoreKey<T>
 	}
 }
