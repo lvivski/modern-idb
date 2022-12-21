@@ -165,27 +165,6 @@ type KeyPathType<T, K> = K extends string
 	? ArrayPathType<T, K>
 	: never
 
-type OriginalStoreKey = string | string[]
-type OriginalStoreIndexes = { [s: string]: OriginalStoreKey } | undefined
-
-type RemappedStore<
-	T,
-	K extends OriginalStoreKey,
-	I extends OriginalStoreIndexes
-> = {
-	key: KeyPathType<T, K>
-	value: T
-	indexes: I extends object
-		? {
-				[K in keyof I]: KeyPathType<T, I[K]>
-		  }
-		: undefined
-}
-
-type RemappedSchema<T extends ValidSchema<T>> = {
-	[K in keyof T]: RemappedStore<T[K]['value'], T[K]['key'], T[K]['indexes']>
-}
-
 type ValidStoreKey<T> = Path<T> | Path<T>[]
 type ValidStore<T> = {
 	key: ValidStoreKey<T>
@@ -199,13 +178,13 @@ type ValidSchema<T extends ValidSchema<T>> = {
 	[K in keyof T]: ValidStore<T[K]['value']>
 }
 
-export type Validate<T extends ValidSchema<T>> = RemappedSchema<T>
+export type Validate<T extends ValidSchema<T>> = T
 
 type Store = {
-	key: IDBValidKey
+	key: string | string[]
 	value: any
 	indexes: {
-		[s: string]: IDBValidKey
+		[s: string]: string | string[]
 	}
 }
 
@@ -230,6 +209,11 @@ type SchemaObjectStoreValue<
 	N extends SchemaObjectStoreName<S>
 > = SchemaObjectStore<S, N>['value']
 
+type SchemaObjectStoreKeyType<
+	S extends Schema,
+	N extends SchemaObjectStoreName<S>
+> = KeyPathType<SchemaObjectStoreValue<S, N>, SchemaObjectStoreKey<S, N>>
+
 type SchemaObjectStoreIndex<
 	S extends Schema,
 	N extends SchemaObjectStoreName<S>
@@ -245,6 +229,15 @@ type SchemaObjectStoreIndexKey<
 	N extends SchemaObjectStoreName<S>,
 	I extends SchemaObjectStoreIndexName<S, N>
 > = SchemaObjectStoreIndex<S, N>[I]
+
+type SchemaObjectStoreIndexKeyType<
+	S extends Schema,
+	N extends SchemaObjectStoreName<S>,
+	I extends SchemaObjectStoreIndexName<S, N>
+> = KeyPathType<
+	SchemaObjectStoreValue<S, N>,
+	SchemaObjectStoreIndexKey<S, N, I>
+>
 
 interface StrictDatabase<S extends Schema> extends Database {
 	transaction<TN extends SchemaObjectStoreName<S>>(
@@ -277,38 +270,38 @@ interface StrictObjectStore<
 	): StrictIndex<S, N, TN, I>
 	add(
 		value: SchemaObjectStoreValue<S, N>,
-		key?: SchemaObjectStoreKey<S, N>
-	): ThenableRequest<SchemaObjectStoreKey<S, N>>
+		key?: SchemaObjectStoreKeyType<S, N>
+	): ThenableRequest<SchemaObjectStoreKeyType<S, N>>
 	put(
 		value: SchemaObjectStoreValue<S, N>,
-		key?: SchemaObjectStoreKey<S, N>
-	): ThenableRequest<SchemaObjectStoreKey<S, N>>
+		key?: SchemaObjectStoreKeyType<S, N>
+	): ThenableRequest<SchemaObjectStoreKeyType<S, N>>
 	delete(
-		query: SchemaObjectStoreKey<S, N> | IDBKeyRange
+		query: SchemaObjectStoreKeyType<S, N> | IDBKeyRange
 	): ThenableRequest<undefined>
 	count(
-		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange
+		query?: SchemaObjectStoreKeyType<S, N> | IDBKeyRange
 	): ThenableRequest<number>
 	get(
-		query: SchemaObjectStoreKey<S, N> | IDBKeyRange
+		query: SchemaObjectStoreKeyType<S, N> | IDBKeyRange
 	): ThenableRequest<SchemaObjectStoreValue<S, N>>
 	getAll(
-		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
+		query?: SchemaObjectStoreKeyType<S, N> | IDBKeyRange | null,
 		count?: number
 	): ThenableRequest<SchemaObjectStoreValue<S, N>[]>
 	getKey(
-		query: SchemaObjectStoreKey<S, N> | IDBKeyRange
-	): ThenableRequest<SchemaObjectStoreKey<S, N> | undefined>
+		query: SchemaObjectStoreKeyType<S, N> | IDBKeyRange
+	): ThenableRequest<SchemaObjectStoreKeyType<S, N> | undefined>
 	getAllKeys(
-		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
+		query?: SchemaObjectStoreKeyType<S, N> | IDBKeyRange | null,
 		count?: number
-	): ThenableRequest<SchemaObjectStoreKey<S, N>[]>
+	): ThenableRequest<SchemaObjectStoreKeyType<S, N>[]>
 	openCursor(
-		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
+		query?: SchemaObjectStoreKeyType<S, N> | IDBKeyRange | null,
 		direction?: IDBCursorDirection
 	): IterableRequest<StrictCursorWithValue<S, N, TN>>
 	openKeyCursor(
-		query?: SchemaObjectStoreKey<S, N> | IDBKeyRange | null,
+		query?: SchemaObjectStoreKeyType<S, N> | IDBKeyRange | null,
 		direction?: IDBCursorDirection
 	): IterableRequest<StrictCursor<S, N, TN>>
 }
@@ -321,28 +314,28 @@ interface StrictIndex<
 > extends Index {
 	readonly objectStore: StrictObjectStore<S, N, TN>
 	readonly name: I extends string ? I : never
-	count<K extends SchemaObjectStoreIndexKey<S, N, I>>(
+	count<K extends SchemaObjectStoreIndexKeyType<S, N, I>>(
 		query?: K | IDBKeyRange
 	): ThenableRequest<number>
-	get<K extends SchemaObjectStoreIndexKey<S, N, I>>(
+	get<K extends SchemaObjectStoreIndexKeyType<S, N, I>>(
 		query: K | IDBKeyRange
 	): ThenableRequest<SchemaObjectStoreValue<S, N>>
-	getAll<K extends SchemaObjectStoreIndexKey<S, N, I>>(
+	getAll<K extends SchemaObjectStoreIndexKeyType<S, N, I>>(
 		query?: K | IDBKeyRange | null,
 		count?: number
 	): ThenableRequest<SchemaObjectStoreValue<S, N>[]>
-	getKey<K extends SchemaObjectStoreIndexKey<S, N, I>>(
+	getKey<K extends SchemaObjectStoreIndexKeyType<S, N, I>>(
 		query: K | IDBKeyRange
-	): ThenableRequest<SchemaObjectStoreKey<S, N> | undefined>
-	getAllKeys<K extends SchemaObjectStoreIndexKey<S, N, I>>(
+	): ThenableRequest<SchemaObjectStoreKeyType<S, N> | undefined>
+	getAllKeys<K extends SchemaObjectStoreIndexKeyType<S, N, I>>(
 		query?: K | IDBKeyRange | null,
 		count?: number
-	): ThenableRequest<SchemaObjectStoreKey<S, N>[]>
-	openCursor<K extends SchemaObjectStoreIndexKey<S, N, I>>(
+	): ThenableRequest<SchemaObjectStoreKeyType<S, N>[]>
+	openCursor<K extends SchemaObjectStoreIndexKeyType<S, N, I>>(
 		range?: K | IDBKeyRange | null,
 		direction?: IDBCursorDirection
 	): IterableRequest<StrictCursorWithValue<S, N, TN, I>>
-	openKeyCursor<K extends SchemaObjectStoreIndexKey<S, N, I>>(
+	openKeyCursor<K extends SchemaObjectStoreIndexKeyType<S, N, I>>(
 		range?: K | IDBKeyRange | null,
 		direction?: IDBCursorDirection
 	): IterableRequest<StrictCursor<S, N, TN, I>>
@@ -355,16 +348,16 @@ interface StrictCursorWithValue<
 	I extends SchemaObjectStoreIndexName<S, N> | unknown = unknown
 > extends CursorWithValue {
 	readonly key: I extends SchemaObjectStoreIndexName<S, N>
-		? SchemaObjectStoreIndexKey<S, N, I>
-		: SchemaObjectStoreKey<S, N>
-	readonly primaryKey: SchemaObjectStoreKey<S, N>
+		? SchemaObjectStoreIndexKeyType<S, N, I>
+		: SchemaObjectStoreKeyType<S, N>
+	readonly primaryKey: SchemaObjectStoreKeyType<S, N>
 	readonly value: SchemaObjectStoreValue<S, N>
 	readonly source: I extends SchemaObjectStoreIndexName<S, N>
 		? StrictIndex<S, N, TN, I>
 		: StrictObjectStore<S, N, TN>
 	update(
 		value: SchemaObjectStoreValue<S, N>
-	): ThenableRequest<SchemaObjectStoreKey<S, N>>
+	): ThenableRequest<SchemaObjectStoreKeyType<S, N>>
 }
 
 interface StrictCursor<
@@ -374,15 +367,15 @@ interface StrictCursor<
 	I extends SchemaObjectStoreIndexName<S, N> | unknown = unknown
 > extends Cursor {
 	readonly key: I extends SchemaObjectStoreIndexName<S, N>
-		? SchemaObjectStoreIndexKey<S, N, I>
-		: SchemaObjectStoreKey<S, N>
-	readonly primaryKey: SchemaObjectStoreKey<S, N>
+		? SchemaObjectStoreIndexKeyType<S, N, I>
+		: SchemaObjectStoreKeyType<S, N>
+	readonly primaryKey: SchemaObjectStoreKeyType<S, N>
 	readonly source: I extends SchemaObjectStoreIndexName<S, N>
 		? StrictIndex<S, N, TN, I>
 		: StrictObjectStore<S, N, TN>
 	update(
 		value: SchemaObjectStoreValue<S, N>
-	): ThenableRequest<SchemaObjectStoreKey<S, N>>
+	): ThenableRequest<SchemaObjectStoreKeyType<S, N>>
 }
 
 type Migration = (tx: Transaction) => void | Promise<void>
