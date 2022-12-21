@@ -115,14 +115,14 @@ type Wrap<O> = {
 
 type ValidKey = number | string | Date | BufferSource
 
-type Path<T, U extends string = ''> = T extends object
+type Path<T, U extends string = ''> = T extends ValidKey
+	? U
+	: T extends object
 	? {
 			[K in keyof T]: K extends string
 				? Path<T[K], U extends '' ? K : `${U}.${K}`>
 				: U
 	  }[keyof T]
-	: T extends ValidKey
-	? U
 	: never
 
 type SplitPath<T extends string> = T extends `${infer L}.${infer R}`
@@ -138,11 +138,11 @@ type PathHead<T> = T extends ''
 	: never
 type PathTail<T> = T extends `${string}.${infer R}` ? R : never
 type PathType<T, P extends string> = PathHead<P> extends keyof T
-	? T[PathHead<P>] extends object
-		? PathTail<P> extends never
-			? never
-			: PathType<T[PathHead<P>], PathTail<P>>
-		: T[PathHead<P>]
+	? T[PathHead<P>] extends ValidKey
+		? T[PathHead<P>]
+		: T[PathHead<P>] extends object
+		? PathType<T[PathHead<P>], PathTail<P>>
+		: never
 	: never
 
 type ArrayHead<T extends any[]> = T extends [] ? never : T[0]
