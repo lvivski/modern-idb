@@ -141,7 +141,9 @@ type PathType<T, P extends string> = PathHead<P> extends keyof T
 	? T[PathHead<P>] extends ValidKey
 		? T[PathHead<P>]
 		: T[PathHead<P>] extends object
-		? PathType<T[PathHead<P>], PathTail<P>>
+		? PathTail<P> extends never
+			? never
+			: PathType<T[PathHead<P>], PathTail<P>>
 		: never
 	: never
 
