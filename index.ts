@@ -214,10 +214,6 @@ type SchemaObjectStoreKeyType<
 > = SchemaObjectStoreKey<S, N> extends null
 	? IDBValidKey
 	: KeyPathType<SchemaObjectStoreValue<S, N>, SchemaObjectStoreKey<S, N>>
-type SchemaObjectStoreKeyParam<
-	S extends Schema,
-	N extends SchemaObjectStoreName<S>
-> = SchemaObjectStoreKey<S, N> extends null ? IDBValidKey : never
 
 type SchemaObjectStoreAutoIncrement<
 	S extends Schema,
@@ -278,14 +274,14 @@ type StrictObjectStoreInsert<
 	N extends SchemaObjectStoreName<S>
 > = SchemaObjectStoreKey<S, N> extends null
 	? SchemaObjectStoreAutoIncrement<S, N> extends true
-		? (
+		? <K extends IDBValidKey = number>(
 				value: SchemaObjectStoreValue<S, N>,
-				key?: SchemaObjectStoreKeyParam<S, N>
-		  ) => ThenableRequest<SchemaObjectStoreKeyType<S, N>>
-		: (
+				key?: K
+		  ) => ThenableRequest<K>
+		: <K extends IDBValidKey>(
 				value: SchemaObjectStoreValue<S, N>,
-				key: SchemaObjectStoreKeyParam<S, N>
-		  ) => ThenableRequest<SchemaObjectStoreKeyType<S, N>>
+				key: K
+		  ) => ThenableRequest<K>
 	: (
 			value: SchemaObjectStoreValue<S, N>
 	  ) => ThenableRequest<SchemaObjectStoreKeyType<S, N>>
