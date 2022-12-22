@@ -169,15 +169,54 @@ type KeyPathType<T, K> = K extends string
 	? ArrayPathType<T, K>
 	: never
 
-type PartialPath<T, P extends string> = PathHead<P> extends keyof T
+
+type IsOnlyKey<T, K> = Exclude<T, K> extends never ? true : false
+
+type AccumulatedPath<
+	T,
+	K extends string,
+	O extends string,
+	S extends string
+> = IsOnlyKey<T, K> extends true
+	? O extends ''
+		? K
+		: `${O}.${K}` // append key
+	: `${S}${K}` // reset prefix with spacing
+
+type PartialPathPart<
+	T,
+	P extends string, // original path
+	O extends string = '', // final output path
+	S extends string = '' // spacing
+> = PathHead<P> extends keyof T
+	? PathTail<P> extends never
+		? AccumulatedPath<keyof T, PathHead<P>, O, S>
+		: T[PathHead<P>] extends object
+		? PartialPathPart<
+				T[PathHead<P>],
+				PathTail<P>,
+				AccumulatedPath<keyof T, PathHead<P>, O, S>,
+				`${S}.` // add one more level
+		  >
+		: O
+	: O
+
+type PartialPath<
+	T,
+	P extends string,
+	O extends string = PartialPathPart<T, P>
+> = PathHead<P> extends keyof T
 	? PathTail<P> extends never
 		? Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
 		: T[PathHead<P>] extends object
-		? {
-				[K in keyof T]: K extends PathHead<P>
-					? PartialPath<T[K], PathTail<P>>
-					: T[K]
-		  }
+		? Omit<T, PathHead<P>> &
+				(PathHead<O> extends PathHead<P>
+					? {
+							[K in PathHead<P>]?: PartialPath<T[K], PathTail<P>, PathTail<O>>
+					  }
+					: {
+							[K in PathHead<P>]: PartialPath<T[K], PathTail<P>, PathTail<O>>
+					  })
 		: Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
 	: never
 
