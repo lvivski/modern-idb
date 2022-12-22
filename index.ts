@@ -181,18 +181,18 @@ type PartialPath<T, P extends string> = PathHead<P> extends keyof T
 		: Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
 	: never
 
-type ValidStoreKey<T> = Path<T> | Path<T>[]
-type ValidStore<T> = {
-	key: ValidStoreKey<T> | null
+type ValidStoreKey<T, A> = A extends true ? Path<T> : Path<T> | Path<T>[]
+type ValidStore<T, A> = {
+	key: ValidStoreKey<T, A> | null
 	autoIncrement?: boolean
 	value: T
 	indexes: {
-		[s: string]: ValidStoreKey<T>
+		[s: string]: ValidStoreKey<T, false>
 	}
 }
 
 type ValidSchema<T extends ValidSchema<T>> = {
-	[K in keyof T]: ValidStore<T[K]['value']>
+	[K in keyof T]: ValidStore<T[K]['value'], T[K]['autoIncrement']>
 }
 
 export type Validate<T extends ValidSchema<T>> = T
