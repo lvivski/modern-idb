@@ -137,15 +137,15 @@ type PathHead<T> = T extends ''
 	? H
 	: never
 type PathTail<T> = T extends `${string}.${infer R}` ? R : never
-type PathType<T, P extends string> = T extends object
-	? PathHead<P> extends keyof T
+type PathType<T, P extends string> = PathHead<P> extends keyof T
+	? PathTail<P> extends never
 		? T[PathHead<P>] extends ValidKey
 			? T[PathHead<P>]
-			: T[PathHead<P>] extends object
-			? PathTail<P> extends never
-				? never
-				: PathType<T[PathHead<P>], PathTail<P>>
 			: never
+		: T[PathHead<P>] extends ValidKey
+		? never
+		: T[PathHead<P>] extends object
+		? PathType<T[PathHead<P>], PathTail<P>>
 		: never
 	: never
 
@@ -169,16 +169,14 @@ type KeyPathType<T, K> = K extends string
 	? ArrayPathType<T, K>
 	: never
 
-type PartialPath<T, P extends string> = T extends object
-	? PathHead<P> extends keyof T
-		? T[PathHead<P>] extends object
-			? PathTail<P> extends never
-				? Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
-				: Omit<T, PathHead<P>> & {
-						[K in PathHead<P>]: PartialPath<T[K], PathTail<P>>
-				  }
-			: Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
-		: never
+type PartialPath<T, P extends string> = PathHead<P> extends keyof T
+	? PathTail<P> extends never
+		? Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
+		: Omit<T, PathHead<P>> & T[PathHead<P>] extends object
+		? {
+				[K in PathHead<P>]: PartialPath<T[K], PathTail<P>>
+		  }
+		: Partial<Pick<T, PathHead<P>>>
 	: never
 
 type ValidStoreKey<T> = Path<T> | Path<T>[]
