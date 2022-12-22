@@ -172,11 +172,13 @@ type KeyPathType<T, K> = K extends string
 type PartialPath<T, P extends string> = PathHead<P> extends keyof T
 	? PathTail<P> extends never
 		? Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
-		: Omit<T, PathHead<P>> & T[PathHead<P>] extends object
+		: T[PathHead<P>] extends object
 		? {
-				[K in PathHead<P>]: PartialPath<T[K], PathTail<P>>
+				[K in keyof T]: K extends PathHead<P>
+					? PartialPath<T[K], PathTail<P>>
+					: T[K]
 		  }
-		: Partial<Pick<T, PathHead<P>>>
+		: Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
 	: never
 
 type ValidStoreKey<T> = Path<T> | Path<T>[]
