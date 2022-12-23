@@ -146,8 +146,6 @@ type PathType<T, P extends string> = PathHead<P> extends keyof T
 		? T[PathHead<P>] extends ValidKey
 			? T[PathHead<P>]
 			: never
-		: T[PathHead<P>] extends ValidKey
-		? never
 		: T[PathHead<P>] extends object
 		? PathType<T[PathHead<P>], PathTail<P>>
 		: never
@@ -194,14 +192,12 @@ type AllowedOptionalPath<
 > = PathHead<P> extends keyof T
 	? PathTail<P> extends never
 		? AppendOptionalPath<keyof T, PathHead<P>, O, S>
-		: T[PathHead<P>] extends object
-		? AllowedOptionalPath<
+		: AllowedOptionalPath<
 				T[PathHead<P>],
 				PathTail<P>,
 				AppendOptionalPath<keyof T, PathHead<P>, O, S>,
 				`${S}.` // add one more level
 		  >
-		: O
 	: O
 
 type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
@@ -219,14 +215,12 @@ type OptionalPath<
 > = PathHead<P> extends keyof T
 	? PathTail<P> extends never
 		? Optional<T, PathHead<P>>
-		: T[PathHead<P>] extends object
-		? MaybeOptionalRecord<
+		: MaybeOptionalRecord<
 				T,
 				PathHead<P>,
 				OptionalPath<T[PathHead<P>], PathTail<P>, PathTail<O>>,
 				PathHead<O> extends PathHead<P> ? true : false
 		  >
-		: Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
 	: never
 
 type ValidStoreKey<T, A> = A extends true ? Path<T> : Path<T> | Path<T>[]
