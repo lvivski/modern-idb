@@ -169,8 +169,6 @@ type ArrayPathType<
 	U extends any[] = []
 > = ArrayHead<T> extends never
 	? U
-	: ArrayTail<T> extends never
-	? [...U, PathType<O, ArrayHead<T>>]
 	: ArrayPathType<O, ArrayTail<T>, [...U, PathType<O, ArrayHead<T>>]>
 
 type KeyPathType<T, K> = K extends string
