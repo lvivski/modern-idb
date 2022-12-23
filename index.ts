@@ -74,7 +74,9 @@ interface Cursor extends Wrap<IDBCursor> {
 }
 
 type AnyFunction = (...args: any[]) => any
+
 type ReplaceReturnType<F extends AnyFunction, R> = (...args: Parameters<F>) => R
+
 type Remap<T> = T extends IDBDatabase
 	? Database
 	: T extends IDBTransaction
@@ -136,7 +138,9 @@ type PathHead<T> = T extends ''
 	: T extends `${infer H}`
 	? H
 	: never
+
 type PathTail<T> = T extends `${string}.${infer R}` ? R : never
+
 type PathType<T, P extends string> = PathHead<P> extends keyof T
 	? PathTail<P> extends never
 		? T[PathHead<P>] extends ValidKey
@@ -150,11 +154,13 @@ type PathType<T, P extends string> = PathHead<P> extends keyof T
 	: never
 
 type ArrayHead<T extends any[]> = T extends [] ? never : T[0]
+
 type ArrayTail<T extends any[]> = T extends [any]
 	? never
 	: T extends [any, ...infer U]
 	? U
 	: never
+
 type ArrayPathType<
 	O,
 	T extends any[],
@@ -169,58 +175,62 @@ type KeyPathType<T, K> = K extends string
 	? ArrayPathType<T, K>
 	: never
 
-
-type IsOnlyKey<T, K> = Exclude<T, K> extends never ? true : false
-
-type AccumulatedPath<
+type AppendOptionalPath<
 	T,
 	K extends string,
 	O extends string,
 	S extends string
-> = IsOnlyKey<T, K> extends true
+> = Exclude<T, K> extends never // the only key in the path
 	? O extends ''
 		? K
 		: `${O}.${K}` // append key
 	: `${S}${K}` // reset prefix with spacing
 
-type PartialPathPart<
+type OptionalPath<
 	T,
 	P extends string, // original path
-	O extends string = '', // final output path
-	S extends string = '' // spacing
+	O extends string = '', // final optional path
+	S extends string = '' // spacer path
 > = PathHead<P> extends keyof T
 	? PathTail<P> extends never
-		? AccumulatedPath<keyof T, PathHead<P>, O, S>
+		? AppendOptionalPath<keyof T, PathHead<P>, O, S>
 		: T[PathHead<P>] extends object
-		? PartialPathPart<
+		? OptionalPath<
 				T[PathHead<P>],
 				PathTail<P>,
-				AccumulatedPath<keyof T, PathHead<P>, O, S>,
+				AppendOptionalPath<keyof T, PathHead<P>, O, S>,
 				`${S}.` // add one more level
 		  >
 		: O
 	: O
 
+type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
+type MaybeOptionalRecord<
+	T,
+	K extends keyof T,
+	R extends any,
+	C extends boolean
+> = Omit<T, K> & (C extends true ? Partial<Record<K, R>> : Record<K, R>)
+
 type PartialPath<
 	T,
 	P extends string,
-	O extends string = PartialPathPart<T, P>
+	O extends string = OptionalPath<T, P>
 > = PathHead<P> extends keyof T
 	? PathTail<P> extends never
-		? Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
+		? Optional<T, PathHead<P>>
 		: T[PathHead<P>] extends object
-		? Omit<T, PathHead<P>> &
-				(PathHead<O> extends PathHead<P>
-					? {
-							[K in PathHead<P>]?: PartialPath<T[K], PathTail<P>, PathTail<O>>
-					  }
-					: {
-							[K in PathHead<P>]: PartialPath<T[K], PathTail<P>, PathTail<O>>
-					  })
+		? MaybeOptionalRecord<
+				T,
+				PathHead<P>,
+				PartialPath<T[PathHead<P>], PathTail<P>, PathTail<O>>,
+				PathHead<O> extends PathHead<P> ? true : false
+		  >
 		: Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
 	: never
 
 type ValidStoreKey<T, A> = A extends true ? Path<T> : Path<T> | Path<T>[]
+
 type ValidStore<T, A> = {
 	key: ValidStoreKey<T, A> | null
 	autoIncrement?: boolean
