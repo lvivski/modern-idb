@@ -6,12 +6,16 @@ interface Transaction extends Wrap<IDBTransaction> {
 	): Promise<U>
 }
 interface ThenableRequest<T> extends Wrap<IDBRequest<T>> {
+	onerror: (ev: Event) => any
+	onsuccess: (ev: Event) => any
 	then<U>(
 		onFulfilled?: (value: T) => U | PromiseLike<U>,
 		onRejected?: (reason: any) => U | PromiseLike<U>
 	): Promise<U>
 }
 interface IterableRequest<T> extends Wrap<IDBRequest<T>> {
+	onerror: (ev: Event) => any
+	onsuccess: (ev: Event) => any
 	[Symbol.asyncIterator](): AsyncIterator<T>
 }
 interface ObjectStore extends Wrap<IDBObjectStore> {
@@ -93,26 +97,26 @@ type Remap<T> = T extends IDBDatabase
 	? Cursor
 	: T
 
-type WrapProp<K, P> = K extends 'result'
-	? P
-	: P extends (...args: any[]) => infer R
+type WrapProp<O, K extends keyof O> = K extends 'result'
+	? O[K]
+	: O[K] extends (...args: any[]) => infer R
 	? R extends IDBRequest<infer T>
 		? K extends 'openCursor'
-			? ReplaceReturnType<P, IterableRequest<CursorWithValue>>
+			? ReplaceReturnType<O[K], IterableRequest<CursorWithValue>>
 			: K extends 'openKeyCursor'
-			? ReplaceReturnType<P, IterableRequest<Cursor>>
+			? ReplaceReturnType<O[K], IterableRequest<Cursor>>
 			: K extends 'add' | 'put' | 'update'
-			? ReplaceReturnType<P, ThenableRequest<IDBValidKey>>
+			? ReplaceReturnType<O[K], ThenableRequest<IDBValidKey>>
 			: K extends 'getKey'
-			? ReplaceReturnType<P, ThenableRequest<IDBValidKey | undefined>>
+			? ReplaceReturnType<O[K], ThenableRequest<IDBValidKey | undefined>>
 			: K extends 'getAllKeys'
-			? ReplaceReturnType<P, ThenableRequest<IDBValidKey[]>>
-			: ReplaceReturnType<P, ThenableRequest<Remap<T>>>
-		: ReplaceReturnType<P, Remap<R>>
-	: Remap<P>
+			? ReplaceReturnType<O[K], ThenableRequest<IDBValidKey[]>>
+			: ReplaceReturnType<O[K], ThenableRequest<Remap<T>>>
+		: ReplaceReturnType<O[K], Remap<R>>
+	: Remap<O[K]>
 
 type Wrap<O> = {
-	[K in keyof O]: WrapProp<K, O[K]>
+	[K in keyof O]: WrapProp<O, K>
 }
 
 type ValidKey = number | string | Date | BufferSource
