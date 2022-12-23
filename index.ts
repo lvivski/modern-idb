@@ -221,7 +221,7 @@ type OptionalPath<
 				OptionalPath<T[PathHead<P>], PathTail<P>, PathTail<O>>,
 				PathHead<O> extends PathHead<P> ? true : false
 		  >
-	: never
+	: O
 
 type ValidStoreKey<T, A> = A extends true ? Path<T> : Path<T> | Path<T>[]
 
