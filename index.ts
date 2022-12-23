@@ -186,7 +186,7 @@ type AppendOptionalPath<
 		: `${O}.${K}` // append key
 	: `${S}${K}` // reset prefix with spacing
 
-type OptionalPath<
+type AllowedOptionalPath<
 	T,
 	P extends string, // original path
 	O extends string = '', // final optional path
@@ -195,7 +195,7 @@ type OptionalPath<
 	? PathTail<P> extends never
 		? AppendOptionalPath<keyof T, PathHead<P>, O, S>
 		: T[PathHead<P>] extends object
-		? OptionalPath<
+		? AllowedOptionalPath<
 				T[PathHead<P>],
 				PathTail<P>,
 				AppendOptionalPath<keyof T, PathHead<P>, O, S>,
@@ -212,10 +212,10 @@ type MaybeOptionalRecord<
 	C extends boolean
 > = Omit<T, K> & (C extends true ? Partial<Record<K, R>> : Record<K, R>)
 
-type PartialPath<
+type OptionalPath<
 	T,
 	P extends string,
-	O extends string = OptionalPath<T, P>
+	O extends string = AllowedOptionalPath<T, P>
 > = PathHead<P> extends keyof T
 	? PathTail<P> extends never
 		? Optional<T, PathHead<P>>
@@ -223,7 +223,7 @@ type PartialPath<
 		? MaybeOptionalRecord<
 				T,
 				PathHead<P>,
-				PartialPath<T[PathHead<P>], PathTail<P>, PathTail<O>>,
+				OptionalPath<T[PathHead<P>], PathTail<P>, PathTail<O>>,
 				PathHead<O> extends PathHead<P> ? true : false
 		  >
 		: Omit<T, PathHead<P>> & Partial<Pick<T, PathHead<P>>>
@@ -293,7 +293,7 @@ type SchemaObjectStoreValuePartial<
 	N extends SchemaObjectStoreName<S>
 > = SchemaObjectStoreAutoIncrement<S, N> extends true
 	? SchemaObjectStoreKey<S, N> extends string
-		? PartialPath<SchemaObjectStoreValue<S, N>, SchemaObjectStoreKey<S, N>>
+		? OptionalPath<SchemaObjectStoreValue<S, N>, SchemaObjectStoreKey<S, N>>
 		: SchemaObjectStoreValue<S, N>
 	: SchemaObjectStoreValue<S, N>
 
