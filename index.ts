@@ -150,7 +150,9 @@ type PathType<T, P extends string> = PathHead<P> extends keyof T
 		? T[PathHead<P>] extends ValidKey
 			? T[PathHead<P>]
 			: never
-		: PathType<T[PathHead<P>], PathTail<P>>
+		: T[PathHead<P>] extends object
+		? PathType<T[PathHead<P>], PathTail<P>>
+		: never
 	: never
 
 type ArrayHead<T extends any[]> = T extends [] ? never : T[0]
@@ -168,8 +170,8 @@ type ArrayPathType<
 > = ArrayHead<T> extends never
 	? U
 	: ArrayTail<T> extends never
-	? PathType<O, T[0]>
-	: ArrayPathType<O, ArrayTail<T>, [...U, PathType<O, T[0]>]>
+	? [...U, PathType<O, ArrayHead<T>>]
+	: ArrayPathType<O, ArrayTail<T>, [...U, PathType<O, ArrayHead<T>>]>
 
 type KeyPathType<T, K> = K extends string
 	? PathType<T, K>
