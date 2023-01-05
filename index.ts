@@ -227,6 +227,12 @@ type OptionalPath<
 		  >
 	: O
 
+type Reduce<T> = T extends object
+	? {
+			[K in keyof T]: Reduce<T[K]>
+	  }
+	: T
+
 type ValidStoreKey<T, A> = A extends true ? Path<T> : Path<T> | Path<T>[]
 
 type ValidStore<T, A> = {
@@ -291,7 +297,9 @@ type SchemaObjectStoreValuePartial<
 	N extends SchemaObjectStoreName<S>
 > = SchemaObjectStoreAutoIncrement<S, N> extends true
 	? SchemaObjectStoreKey<S, N> extends string
-		? OptionalPath<SchemaObjectStoreValue<S, N>, SchemaObjectStoreKey<S, N>>
+		? Reduce<
+				OptionalPath<SchemaObjectStoreValue<S, N>, SchemaObjectStoreKey<S, N>>
+		  >
 		: SchemaObjectStoreValue<S, N>
 	: SchemaObjectStoreValue<S, N>
 
