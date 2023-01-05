@@ -636,13 +636,18 @@ function wrapRequest<T>(input: IDBRequest<T>): ThenableRequest<Wrap<T>> {
 function wrapCursorRequest<T extends IDBCursor>(
 	value: IDBRequest<T>
 ): IterableRequest<Wrap<T>> {
-	const iterator = () => ({
-		next: () =>
-			requestPromise(value).then(cursor => ({ value: cursor, done: !cursor })),
-	})
-
 	return Object.defineProperty(value as any, Symbol.asyncIterator, {
-		value: iterator,
+		async *value() {
+			let cursor: Wrap<T> | undefined
+			let prevKey: unknown
+			while ((cursor = await requestPromise(value))) {
+				if (prevKey === cursor.primaryKey) {
+					break
+				}
+				prevKey = cursor.primaryKey
+				yield cursor
+			}
+		},
 	})
 }
 
