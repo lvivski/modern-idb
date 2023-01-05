@@ -545,9 +545,14 @@ const proxyTargets = [
 	IDBCursor,
 ]
 
+const transactionThenMap = new WeakMap()
+
 const then = 'then'
 const proxyHandler: ProxyHandler<any> = {
 	get(target, prop) {
+		if (prop === then && target instanceof IDBTransaction) {
+			return transactionThenMap.get(target)
+		}
 		if ((prop === then || prop === Symbol.asyncIterator) && prop in target) {
 			return target[prop]
 		}
@@ -560,6 +565,9 @@ const proxyHandler: ProxyHandler<any> = {
 	},
 
 	has(target, prop) {
+		if (prop === then && target instanceof IDBTransaction) {
+			return true
+		}
 		return prop in target
 	},
 }
@@ -572,6 +580,10 @@ function wrapValue(value: any): any {
 	}
 
 	if (proxyTargets.some(type => value instanceof type)) {
+		if (value instanceof IDBTransaction) {
+			value = wrapTransaction(value)
+		}
+
 		if (value instanceof IDBRequest) {
 			if (cursorRequest in value) {
 				value = wrapCursorRequest(value)
@@ -580,12 +592,39 @@ function wrapValue(value: any): any {
 			}
 		}
 
-		if (value instanceof IDBTransaction) {
-			value = wrapTransaction(value)
-		}
-
 		return new Proxy(value, proxyHandler)
 	}
+
+	return value
+}
+
+function wrapTransaction(value: IDBTransaction): IDBTransaction {
+	if (transactionThenMap.has(value)) {
+		return value
+	}
+
+	const controller = new AbortController()
+	const options = { once: true, signal: controller.signal }
+
+	const promise = new Promise<void>((resolve, reject) => {
+		if (value instanceof IDBTransaction) {
+			function complete() {
+				resolve()
+				controller.abort()
+			}
+			function error() {
+				reject(value.error)
+				controller.abort()
+			}
+			value.addEventListener('complete', complete, options)
+			value.addEventListener('error', error, options)
+			value.addEventListener('abort', error, options)
+		} else {
+			resolve()
+		}
+	})
+
+	transactionThenMap.set(value, promise.then.bind(promise))
 
 	return value
 }
@@ -594,12 +633,7 @@ function wrapRequest<T>(input: IDBRequest<T>): ThenableRequest<Wrap<T>> {
 	const promise = requestPromise(input)
 
 	return Object.defineProperty(input as any, then, {
-		value(
-			onfulfilled: (value: Wrap<T>) => Wrap<T>,
-			onrejected: (reason: any) => any
-		) {
-			return promise.then(onfulfilled, onrejected)
-		},
+		value: promise.then.bind(promise),
 	})
 }
 
@@ -644,35 +678,6 @@ function requestPromise<T>(input: IDBRequest<T>): Promise<Wrap<T>> {
 		} else {
 			resolve(input)
 		}
-	})
-}
-
-function wrapTransaction(value: IDBTransaction): Transaction {
-	const controller = new AbortController()
-	const options = { once: true, signal: controller.signal }
-
-	const promise = new Promise<void>((resolve, reject) => {
-		if (value instanceof IDBTransaction) {
-			function complete() {
-				resolve()
-				controller.abort()
-			}
-			function error() {
-				reject(value.error)
-				controller.abort()
-			}
-			value.addEventListener('complete', complete, options)
-			value.addEventListener('error', error, options)
-			value.addEventListener('abort', error, options)
-		} else {
-			resolve()
-		}
-	})
-
-	return Object.defineProperty(value as any, then, {
-		value(onfulfilled: (value: any) => any, onrejected: (reason: any) => any) {
-			return promise.then(onfulfilled, onrejected)
-		},
 	})
 }
 
