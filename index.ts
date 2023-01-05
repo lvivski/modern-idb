@@ -640,26 +640,26 @@ function wrapRequest<T>(input: IDBRequest<T>): ThenableRequest<Wrap<T>> {
 function wrapCursorRequest<T extends IDBCursor>(
 	value: IDBRequest<T>
 ): IterableRequest<Wrap<T>> {
-	let promise = requestPromise(value)
+	const iterator = () => ({
+		next: () =>
+			requestPromise(value).then(cursor => ({ value: cursor, done: !cursor })),
+	})
 
 	return Object.defineProperty(value as any, Symbol.asyncIterator, {
-		value() {
-			return {
-				next() {
-					return promise.then(cursor => {
-						if (cursor) {
-							promise = requestPromise(value)
-							return { value: cursor, done: false }
-						}
-						return { value: undefined, done: true }
-					})
-				},
-			}
-		},
+		value: iterator,
 	})
 }
 
 function requestPromise<T>(input: IDBRequest<T>): Promise<Wrap<T>> {
+	if (input.readyState === 'done') {
+		if (input.result) {
+			return Promise.resolve(wrap(input.result))
+		}
+		if (input.error) {
+			return Promise.reject(input.error)
+		}
+	}
+
 	const controller = new AbortController()
 	const options = { once: true, signal: controller.signal }
 
