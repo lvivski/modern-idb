@@ -545,14 +545,9 @@ const proxyTargets = [
 	IDBCursor,
 ]
 
-const transactionThenMap = new WeakMap()
-
 const then = 'then'
 const proxyHandler: ProxyHandler<any> = {
 	get(target, prop) {
-		if (prop === then && target instanceof IDBTransaction) {
-			return transactionThenMap.get(target)
-		}
 		if ((prop === then || prop === Symbol.asyncIterator) && prop in target) {
 			return target[prop]
 		}
@@ -565,9 +560,6 @@ const proxyHandler: ProxyHandler<any> = {
 	},
 
 	has(target, prop) {
-		if (prop === then && target instanceof IDBTransaction) {
-			return true
-		}
 		return prop in target
 	},
 }
@@ -598,11 +590,7 @@ function wrapValue(value: any): any {
 	return value
 }
 
-function wrapTransaction(value: IDBTransaction): IDBTransaction {
-	if (transactionThenMap.has(value)) {
-		return value
-	}
-
+function wrapTransaction(value: IDBTransaction): Transaction {
 	const controller = new AbortController()
 	const options = { once: true, signal: controller.signal }
 
@@ -624,9 +612,9 @@ function wrapTransaction(value: IDBTransaction): IDBTransaction {
 		}
 	})
 
-	transactionThenMap.set(value, promise.then.bind(promise))
-
-	return value
+	return Object.defineProperty(value as any, then, {
+		value: promise.then.bind(promise),
+	})
 }
 
 function wrapRequest<T>(input: IDBRequest<T>): ThenableRequest<Wrap<T>> {
