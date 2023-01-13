@@ -119,7 +119,7 @@ type Wrap<O> = {
 	[K in keyof O]: WrapProp<O, K>
 }
 
-type ValidKey = number | string | Date | BufferSource
+type ValidKey = number | string | Date | BufferSource | undefined
 
 type Path<T, U extends string = ''> = T extends ValidKey
 	? U
