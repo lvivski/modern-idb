@@ -27,7 +27,7 @@
     "modern"
   ],
   "devDependencies": {
-    "typescript": "^4.8.4"
+    "typescript": "^5"
   },
   "prettier": {
     "semi": false,
